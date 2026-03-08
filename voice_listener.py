@@ -46,22 +46,35 @@ class VoiceListener:
         write(temp.name, config.SAMPLE_RATE, audio)
         return Path(temp.name)
 
+    def _is_audio_loud_enough(self, audio: np.ndarray) -> bool:
+        """Filter out very quiet segments before expensive STT calls."""
+        normalized = audio.astype(np.float32) / 32768.0
+        rms = float(np.sqrt(np.mean(np.square(normalized))))
+        return rms >= config.MIN_AUDIO_RMS
+
     def _listen_loop(self) -> None:
-        self.on_status("Listening for wake word...")
+        self.on_status("Listening for wake word: Luvi / Луви")
         while not self._stop_event.is_set():
             wake_path: Path | None = None
             cmd_path: Path | None = None
             try:
                 wake_audio = self._record_audio(config.WAKE_LISTEN_SECONDS)
-                wake_path = self._save_temp_wav(wake_audio)
+                if not self._is_audio_loud_enough(wake_audio):
+                    continue
 
+                wake_path = self._save_temp_wav(wake_audio)
                 if not self.wake_detector.detect_from_audio(wake_path):
                     continue
 
                 self.on_status("Wake word detected. Listening for command...")
                 cmd_audio = self._record_audio(config.COMMAND_RECORD_SECONDS)
+                if not self._is_audio_loud_enough(cmd_audio):
+                    self.on_status("Command too quiet. Please speak a little louder.")
+                    continue
+
                 cmd_path = self._save_temp_wav(cmd_audio)
                 command_text = self.stt.transcribe_file(cmd_path)
+                command_text = self.wake_detector.remove_wake_word(command_text)
 
                 if command_text:
                     self.on_command(command_text)
@@ -73,4 +86,4 @@ class VoiceListener:
                 if cmd_path and cmd_path.exists():
                     cmd_path.unlink(missing_ok=True)
 
-            self.on_status("Listening for wake word...")
+            self.on_status("Listening for wake word: Luvi / Луви")
