@@ -13,12 +13,12 @@ from text_to_speech import TextToSpeech
 
 
 class LuviUI:
-    """Styled desktop UI with conversation history and text input."""
+    """Styled purple desktop UI with conversation history and text input."""
 
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title(config.WINDOW_TITLE)
-        self.root.geometry("940x620")
+        self.root.geometry("980x650")
         self.root.configure(bg=config.UI_BG)
 
         self.brain = AssistantBrain()
@@ -29,15 +29,15 @@ class LuviUI:
         self.root.after(100, self._drain_messages)
 
     def _build_layout(self) -> None:
-        header = tk.Frame(self.root, bg=config.UI_PANEL, height=72)
+        header = tk.Frame(self.root, bg=config.UI_PANEL, height=80, highlightthickness=1, highlightbackground="#4c1d95")
         header.pack(fill="x", padx=14, pady=(14, 10))
 
         title = tk.Label(
             header,
-            text="✨ Luvi",
+            text="💜 Luvi Assistant",
             bg=config.UI_PANEL,
             fg=config.UI_TEXT,
-            font=("Segoe UI", 18, "bold"),
+            font=("Segoe UI", 20, "bold"),
         )
         title.pack(anchor="w", padx=14, pady=(10, 0))
 
@@ -63,6 +63,7 @@ class LuviUI:
             anchor="w",
             padx=12,
             pady=8,
+            relief="flat",
         )
         self.intent_label.pack(fill="x")
 
@@ -78,8 +79,9 @@ class LuviUI:
             insertbackground=config.UI_TEXT,
             relief="flat",
             font=("Segoe UI", 11),
-            padx=10,
-            pady=10,
+            padx=12,
+            pady=12,
+            selectbackground="#6d28d9",
         )
         self.chat.pack(fill="both", expand=True)
 
@@ -92,9 +94,12 @@ class LuviUI:
             fg=config.UI_TEXT,
             insertbackground=config.UI_TEXT,
             relief="flat",
-            font=("Segoe UI", 11),
+            font=("Segoe UI", 12),
+            highlightthickness=1,
+            highlightbackground="#4c1d95",
+            highlightcolor=config.UI_ACCENT,
         )
-        self.entry.pack(side="left", fill="x", expand=True, ipady=10)
+        self.entry.pack(side="left", fill="x", expand=True, ipady=11)
         self.entry.bind("<Return>", lambda _: self.submit_text())
 
         send_button = tk.Button(
@@ -104,18 +109,21 @@ class LuviUI:
             bg=config.UI_ACCENT,
             fg="white",
             relief="flat",
-            activebackground="#6d28d9",
+            activebackground=config.UI_ACCENT_ALT,
             activeforeground="white",
             font=("Segoe UI", 10, "bold"),
-            padx=16,
-            pady=8,
+            padx=18,
+            pady=10,
+            cursor="hand2",
         )
         send_button.pack(side="right", padx=(10, 0))
 
     def append_chat(self, speaker: str, text: str) -> None:
         self.chat.config(state="normal")
-        prefix = "🧑 You" if speaker.startswith("You") else "🤖 Luvi"
-        self.chat.insert(tk.END, f"{prefix}\n{text}\n\n")
+        if speaker.startswith("You"):
+            self.chat.insert(tk.END, f"🧑 You\n{text}\n\n")
+        else:
+            self.chat.insert(tk.END, f"🤖 Luvi\n{text}\n\n")
         self.chat.config(state="disabled")
         self.chat.see(tk.END)
 

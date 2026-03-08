@@ -46,8 +46,14 @@ class VoiceListener:
         write(temp.name, config.SAMPLE_RATE, audio)
         return Path(temp.name)
 
+    def _apply_gain(self, audio: np.ndarray, gain: float) -> np.ndarray:
+        """Amplify audio to improve quiet speech recognition while clipping safely."""
+        boosted = audio.astype(np.float32) * gain
+        clipped = np.clip(boosted, -32768, 32767)
+        return clipped.astype(np.int16)
+
     def _is_audio_loud_enough(self, audio: np.ndarray) -> bool:
-        """Filter out very quiet segments before expensive STT calls."""
+        """Filter out extremely quiet segments before expensive STT calls."""
         normalized = audio.astype(np.float32) / 32768.0
         rms = float(np.sqrt(np.mean(np.square(normalized))))
         return rms >= config.MIN_AUDIO_RMS
@@ -62,6 +68,7 @@ class VoiceListener:
                 if not self._is_audio_loud_enough(wake_audio):
                     continue
 
+                wake_audio = self._apply_gain(wake_audio, config.WAKE_AUDIO_GAIN)
                 wake_path = self._save_temp_wav(wake_audio)
                 if not self.wake_detector.detect_from_audio(wake_path):
                     continue
@@ -72,6 +79,7 @@ class VoiceListener:
                     self.on_status("Command too quiet. Please speak a little louder.")
                     continue
 
+                cmd_audio = self._apply_gain(cmd_audio, config.COMMAND_AUDIO_GAIN)
                 cmd_path = self._save_temp_wav(cmd_audio)
                 command_text = self.stt.transcribe_file(cmd_path)
                 command_text = self.wake_detector.remove_wake_word(command_text)

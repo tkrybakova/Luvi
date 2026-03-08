@@ -9,7 +9,9 @@ SAMPLE_RATE = 16_000
 CHANNELS = 1
 WAKE_LISTEN_SECONDS = 2.5
 COMMAND_RECORD_SECONDS = 7
-MIN_AUDIO_RMS = 0.005  # Lower threshold: easier activation for quieter speech
+MIN_AUDIO_RMS = 0.0015  # Lower threshold: catches quieter voice segments better
+WAKE_AUDIO_GAIN = 2.2
+COMMAND_AUDIO_GAIN = 2.8
 
 # Models and local services
 WHISPER_MODEL_SIZE = "base"
@@ -30,10 +32,11 @@ SEARCH_RESULTS_LIMIT = 5
 # UI
 WINDOW_TITLE = "Luvi - Local AI Assistant"
 
-# Dark theme colors
-UI_BG = "#0f172a"
-UI_PANEL = "#111827"
-UI_SURFACE = "#1f2937"
-UI_ACCENT = "#7c3aed"
-UI_TEXT = "#e5e7eb"
-UI_TEXT_MUTED = "#94a3b8"
+# Purple theme colors
+UI_BG = "#130a2a"
+UI_PANEL = "#1d1140"
+UI_SURFACE = "#2a1759"
+UI_ACCENT = "#9f5cff"
+UI_ACCENT_ALT = "#7c3aed"
+UI_TEXT = "#f3e8ff"
+UI_TEXT_MUTED = "#c4b5fd"

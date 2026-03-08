@@ -1,10 +1,10 @@
 # Luvi - Local AI Assistant
 
-Luvi is a modular local desktop AI assistant for laptops. It continuously listens for the wake word **"Luvi"**, captures voice commands, routes them by intent, and responds via both a GUI and spoken output.
+Luvi is a modular local desktop AI assistant for laptops. It continuously listens for the wake word **"Luvi"** (also supports **"Луви"**), captures voice commands, routes them by intent, and responds via both a GUI and spoken output.
 
 ## Features
 
-- Wake-word workflow: `Luvi` → record command → transcribe with **faster-whisper**.
+- Wake-word workflow: `Luvi/Луви` → record command → transcribe with **faster-whisper**.
 - Local LLM reasoning through **Ollama**.
 - Voice output with **Piper TTS**.
 - Command routing:
@@ -12,7 +12,8 @@ Luvi is a modular local desktop AI assistant for laptops. It continuously listen
   - AI Q&A
   - web search + LLM summarization
   - screen reading with OCR
-- Tkinter desktop UI:
+- Tkinter desktop UI (purple themed):
+  - modern purple header + cards
   - conversation history
   - recognized command/intent display
   - text-input fallback
@@ -41,26 +42,68 @@ Luvi is a modular local desktop AI assistant for laptops. It continuously listen
    ```bash
    pip install -r requirements.txt
    ```
-3. Install and run Ollama locally, then pull a model:
-   ```bash
-   ollama pull llama3.1
-   ollama serve
-   ```
-4. Install Piper and download a voice model (for example `en_US-lessac-medium.onnx`).
-5. Install Tesseract OCR:
-   - Ubuntu/Debian: `sudo apt install tesseract-ocr`
-   - macOS (Homebrew): `brew install tesseract`
-   - Windows: install Tesseract and set path if needed.
-6. Update `config.py` as needed:
-   - `OLLAMA_MODEL`
-   - `PIPER_MODEL_PATH`
-   - `TESSERACT_CMD`
+
+### Install Ollama
+
+> If PowerShell says `ollama : The term 'ollama' is not recognized`, Ollama is not installed or not on PATH.
+
+- **Windows**
+  1. Download installer: https://ollama.com/download/windows
+  2. Install and reopen PowerShell.
+  3. Verify:
+     ```powershell
+     ollama --version
+     ```
+  4. Pull model and start server:
+     ```powershell
+     ollama pull llama3.1
+     ollama serve
+     ```
+
+- **macOS / Linux**
+  ```bash
+  ollama pull llama3.1
+  ollama serve
+  ```
+
+### Install TTS + OCR prerequisites
+
+- Piper: install Piper binary and download a voice model such as `en_US-lessac-medium.onnx`.
+- Tesseract OCR:
+  - Ubuntu/Debian: `sudo apt install tesseract-ocr`
+  - macOS (Homebrew): `brew install tesseract`
+  - Windows: install Tesseract OCR and set `TESSERACT_CMD` in `config.py` if needed.
+
+### Configure `config.py`
+
+Set these values for your machine:
+- `OLLAMA_MODEL`
+- `PIPER_MODEL_PATH`
+- `TESSERACT_CMD`
+- `MIN_AUDIO_RMS` (microphone sensitivity; lower value = easier wake-word triggering)
+- `WAKE_AUDIO_GAIN` and `COMMAND_AUDIO_GAIN` (boost quiet speech before STT)
 
 ## Run
 
 ```bash
 python main.py
 ```
+
+## Quick troubleshooting
+
+- Wake word triggers only when speaking loudly:
+  - lower `MIN_AUDIO_RMS` in `config.py` (e.g., `0.0015` -> `0.0010`)
+  - increase `WAKE_AUDIO_GAIN` / `COMMAND_AUDIO_GAIN` (e.g., `2.2` -> `3.0`)
+  - verify microphone input level in OS settings
+
+- `ollama` command not found on Windows:
+  - reinstall Ollama from the official installer
+  - close/reopen terminal (to refresh PATH)
+  - run `ollama --version`
+- Ollama installed but app says it cannot reach Ollama:
+  - ensure `ollama serve` is running
+  - run `ollama list` to verify model exists
+  - confirm `config.py` points to `http://localhost:11434/api/generate`
 
 ## Example voice workflow
 
