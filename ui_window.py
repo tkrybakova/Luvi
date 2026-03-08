@@ -13,109 +13,41 @@ from text_to_speech import TextToSpeech
 
 
 class LuviUI:
-    """Styled desktop UI with conversation history and text input."""
+    """Simple desktop UI with conversation history and text input."""
 
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title(config.WINDOW_TITLE)
-        self.root.geometry("940x620")
-        self.root.configure(bg=config.UI_BG)
+        self.root.geometry("820x560")
 
         self.brain = AssistantBrain()
         self.tts = TextToSpeech()
         self.messages: "queue.Queue[tuple[str, str]]" = queue.Queue()
 
-        self._build_layout()
-        self.root.after(100, self._drain_messages)
+        self.status_label = tk.Label(self.root, text="Starting Luvi...", anchor="w")
+        self.status_label.pack(fill="x", padx=8, pady=6)
 
-    def _build_layout(self) -> None:
-        header = tk.Frame(self.root, bg=config.UI_PANEL, height=72)
-        header.pack(fill="x", padx=14, pady=(14, 10))
+        self.intent_label = tk.Label(self.root, text="Last recognized command: -", anchor="w")
+        self.intent_label.pack(fill="x", padx=8)
 
-        title = tk.Label(
-            header,
-            text="✨ Luvi",
-            bg=config.UI_PANEL,
-            fg=config.UI_TEXT,
-            font=("Segoe UI", 18, "bold"),
-        )
-        title.pack(anchor="w", padx=14, pady=(10, 0))
+        self.chat = scrolledtext.ScrolledText(self.root, state="disabled", wrap=tk.WORD)
+        self.chat.pack(fill="both", expand=True, padx=8, pady=6)
 
-        self.status_label = tk.Label(
-            header,
-            text="Starting Luvi...",
-            bg=config.UI_PANEL,
-            fg=config.UI_TEXT_MUTED,
-            font=("Segoe UI", 10),
-            anchor="w",
-        )
-        self.status_label.pack(fill="x", padx=14, pady=(0, 10))
+        input_row = tk.Frame(self.root)
+        input_row.pack(fill="x", padx=8, pady=(0, 8))
 
-        info_row = tk.Frame(self.root, bg=config.UI_BG)
-        info_row.pack(fill="x", padx=14, pady=(0, 10))
-
-        self.intent_label = tk.Label(
-            info_row,
-            text="Last recognized command: -",
-            bg=config.UI_SURFACE,
-            fg=config.UI_TEXT,
-            font=("Segoe UI", 10),
-            anchor="w",
-            padx=12,
-            pady=8,
-        )
-        self.intent_label.pack(fill="x")
-
-        chat_frame = tk.Frame(self.root, bg=config.UI_BG)
-        chat_frame.pack(fill="both", expand=True, padx=14, pady=(0, 10))
-
-        self.chat = scrolledtext.ScrolledText(
-            chat_frame,
-            state="disabled",
-            wrap=tk.WORD,
-            bg=config.UI_PANEL,
-            fg=config.UI_TEXT,
-            insertbackground=config.UI_TEXT,
-            relief="flat",
-            font=("Segoe UI", 11),
-            padx=10,
-            pady=10,
-        )
-        self.chat.pack(fill="both", expand=True)
-
-        input_row = tk.Frame(self.root, bg=config.UI_BG)
-        input_row.pack(fill="x", padx=14, pady=(0, 14))
-
-        self.entry = tk.Entry(
-            input_row,
-            bg=config.UI_PANEL,
-            fg=config.UI_TEXT,
-            insertbackground=config.UI_TEXT,
-            relief="flat",
-            font=("Segoe UI", 11),
-        )
-        self.entry.pack(side="left", fill="x", expand=True, ipady=10)
+        self.entry = tk.Entry(input_row)
+        self.entry.pack(side="left", fill="x", expand=True)
         self.entry.bind("<Return>", lambda _: self.submit_text())
 
-        send_button = tk.Button(
-            input_row,
-            text="Send",
-            command=self.submit_text,
-            bg=config.UI_ACCENT,
-            fg="white",
-            relief="flat",
-            activebackground="#6d28d9",
-            activeforeground="white",
-            font=("Segoe UI", 10, "bold"),
-            padx=16,
-            pady=8,
-        )
-        send_button.pack(side="right", padx=(10, 0))
+        send_button = tk.Button(input_row, text="Send", command=self.submit_text)
+        send_button.pack(side="right", padx=(8, 0))
+
+        self.root.after(100, self._drain_messages)
 
     def append_chat(self, speaker: str, text: str) -> None:
         self.chat.config(state="normal")
-        prefix = "🧑 You" if speaker.startswith("You") else "🤖 Luvi"
-        self.chat.insert(tk.END, f"{prefix}\n{text}\n\n")
+        self.chat.insert(tk.END, f"{speaker}: {text}\n\n")
         self.chat.config(state="disabled")
         self.chat.see(tk.END)
 

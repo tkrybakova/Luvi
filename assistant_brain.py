@@ -67,8 +67,4 @@ class AssistantBrain:
         try:
             return self.generate_llm_response(prompt)
         except Exception as exc:  # noqa: BLE001 - report runtime API failure
-            return (
-                "I could not reach Ollama right now. "
-                "Please install Ollama, run `ollama serve`, and verify model availability "
-                f"with `ollama list`. Details: {exc}"
-            )
+            return f"I could not reach Ollama right now: {exc}"

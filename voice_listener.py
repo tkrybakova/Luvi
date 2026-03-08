@@ -47,7 +47,7 @@ class VoiceListener:
         return Path(temp.name)
 
     def _listen_loop(self) -> None:
-        self.on_status("Listening for wake word: Luvi / Луви")
+        self.on_status("Listening for wake word...")
         while not self._stop_event.is_set():
             wake_path: Path | None = None
             cmd_path: Path | None = None
@@ -62,7 +62,6 @@ class VoiceListener:
                 cmd_audio = self._record_audio(config.COMMAND_RECORD_SECONDS)
                 cmd_path = self._save_temp_wav(cmd_audio)
                 command_text = self.stt.transcribe_file(cmd_path)
-                command_text = self.wake_detector.remove_wake_word(command_text)
 
                 if command_text:
                     self.on_command(command_text)
@@ -74,4 +73,4 @@ class VoiceListener:
                 if cmd_path and cmd_path.exists():
                     cmd_path.unlink(missing_ok=True)
 
-            self.on_status("Listening for wake word: Luvi / Луви")
+            self.on_status("Listening for wake word...")
