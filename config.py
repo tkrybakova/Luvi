@@ -16,6 +16,9 @@ COMMAND_SILENCE_SECONDS = 1.2
 MIN_AUDIO_RMS = 0.0015  # Lower threshold: catches quieter voice segments better
 WAKE_AUDIO_GAIN = 2.2
 COMMAND_AUDIO_GAIN = 2.8
+INPUT_DEVICE_HINT = ""  # Optional substring of microphone name, e.g. "microphone"
+AUDIO_MAX_RETRIES = 3
+AUDIO_RETRY_SECONDS = 1.0
 
 # Models and local services
 WHISPER_MODEL_SIZE = "base"
