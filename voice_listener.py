@@ -35,7 +35,10 @@ class VoiceListener:
         self._running = False
         self.stt = SpeechToText()
         self.wake_detector = WakeWordDetector(stt=self.stt)
+        self.input_device_index: int | None = None
+        self.sample_rate = config.SAMPLE_RATE
         self._configure_input_device()
+        self._prepare_audio_input()
 
     def _configure_input_device(self) -> None:
         """Optionally set input device by hint to avoid flaky default devices on Windows."""
@@ -47,14 +50,34 @@ class VoiceListener:
             for index, device in enumerate(sd.query_devices()):
                 name = str(device.get("name", "")).lower()
                 if hint in name and int(device.get("max_input_channels", 0)) > 0:
-                    current = sd.default.device
-                    output_idx = current[1] if isinstance(current, (tuple, list)) else None
-                    sd.default.device = (index, output_idx)
+                    self.input_device_index = index
                     self.on_status(f"Using input device: {device.get('name', index)}")
                     return
             self.on_status(f"No microphone matched INPUT_DEVICE_HINT='{config.INPUT_DEVICE_HINT}'. Using default input.")
         except Exception as exc:  # noqa: BLE001
             self.on_status(f"Could not configure input device hint: {exc}")
+
+    def _prepare_audio_input(self) -> None:
+        """Pick the first working sample rate for the selected/default input device."""
+        for candidate in config.AUDIO_SAMPLE_RATE_FALLBACKS:
+            try:
+                sd.check_input_settings(
+                    device=self.input_device_index,
+                    samplerate=candidate,
+                    channels=config.CHANNELS,
+                    dtype="int16",
+                )
+                self.sample_rate = int(candidate)
+                self.on_status(f"Microphone ready at {self.sample_rate} Hz")
+                return
+            except Exception:
+                continue
+
+        self.sample_rate = config.SAMPLE_RATE
+        self.on_status(
+            "Could not pre-validate microphone sample rates. "
+            f"Will try runtime capture at {self.sample_rate} Hz."
+        )
 
     def start(self) -> None:
         """Start listener loop on a daemon thread."""
@@ -74,12 +97,18 @@ class VoiceListener:
         return self._running and not self._stop_event.is_set()
 
     def _record_audio(self, seconds: float) -> np.ndarray:
-        frames = int(seconds * config.SAMPLE_RATE)
+        frames = int(seconds * self.sample_rate)
         last_error: Exception | None = None
 
         for attempt in range(1, config.AUDIO_MAX_RETRIES + 1):
             try:
-                audio = sd.rec(frames, samplerate=config.SAMPLE_RATE, channels=config.CHANNELS, dtype="int16")
+                audio = sd.rec(
+                    frames,
+                    samplerate=self.sample_rate,
+                    channels=config.CHANNELS,
+                    dtype="int16",
+                    device=self.input_device_index,
+                )
                 sd.wait()
                 return audio
             except sd.PortAudioError as exc:
@@ -90,11 +119,15 @@ class VoiceListener:
                 )
                 time.sleep(config.AUDIO_RETRY_SECONDS)
 
+                # On repeated failures, probe rates again to recover from host-device mismatch.
+                if attempt == 1:
+                    self._prepare_audio_input()
+
         raise RuntimeError(f"Microphone unavailable after retries: {last_error}")
 
     def _save_temp_wav(self, audio: np.ndarray) -> Path:
         temp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-        write(temp.name, config.SAMPLE_RATE, audio)
+        write(temp.name, self.sample_rate, audio)
         return Path(temp.name)
 
     def _apply_gain(self, audio: np.ndarray, gain: float) -> np.ndarray:
@@ -174,7 +207,7 @@ class VoiceListener:
             except Exception as exc:  # noqa: BLE001 - runtime device/model failures
                 self.on_status(
                     "Voice listener error. Check microphone access/device in Windows settings, "
-                    "or set INPUT_DEVICE_HINT in config.py. "
+                    "set INPUT_DEVICE_HINT in config.py, or run from latest pulled code. "
                     f"Details: {exc}"
                 )
                 time.sleep(config.AUDIO_RETRY_SECONDS)

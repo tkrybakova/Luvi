@@ -19,6 +19,7 @@ COMMAND_AUDIO_GAIN = 2.8
 INPUT_DEVICE_HINT = ""  # Optional substring of microphone name, e.g. "microphone"
 AUDIO_MAX_RETRIES = 3
 AUDIO_RETRY_SECONDS = 1.0
+AUDIO_SAMPLE_RATE_FALLBACKS = (16000, 44100, 48000)
 
 # Models and local services
 WHISPER_MODEL_SIZE = "base"

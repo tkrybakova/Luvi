@@ -84,7 +84,7 @@ Set these values for your machine:
 - `MIN_AUDIO_RMS` (microphone sensitivity; lower value = easier wake-word triggering)
 - `WAKE_AUDIO_GAIN` and `COMMAND_AUDIO_GAIN` (boost quiet speech before STT)
 - `COMMAND_CHUNK_SECONDS`, `COMMAND_MIN_SECONDS`, `COMMAND_MAX_SECONDS`, `COMMAND_SILENCE_SECONDS` (continuous command listening behavior)
-- `INPUT_DEVICE_HINT`, `AUDIO_MAX_RETRIES`, `AUDIO_RETRY_SECONDS` (microphone recovery/fallback on Windows)
+- `INPUT_DEVICE_HINT`, `AUDIO_MAX_RETRIES`, `AUDIO_RETRY_SECONDS`, `AUDIO_SAMPLE_RATE_FALLBACKS` (microphone recovery/fallback on Windows)
 
 ## Run
 
@@ -103,7 +103,8 @@ python main.py
   - close apps that can lock microphone (Zoom/Teams/Discord/browser tabs)
   - in Windows Settings -> Privacy & security -> Microphone, allow access for desktop apps
   - set `INPUT_DEVICE_HINT` in `config.py` (example: `"microphone"`) to pick a stable input device
-  - listener now retries automatically (`AUDIO_MAX_RETRIES`) before failing
+  - listener now retries automatically (`AUDIO_MAX_RETRIES`) and probes fallback rates (`AUDIO_SAMPLE_RATE_FALLBACKS`) before failing
+  - run `git pull` to ensure you have latest microphone-fix code (older builds called `sd.rec` directly in loop)
 
 - First launch hangs/crashes around `huggingface_hub` / `WhisperModel`:
   - this is usually first-time model download or a broken virtualenv package cache
