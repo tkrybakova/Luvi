@@ -17,6 +17,7 @@ class ScreenReader:
 
     def __init__(self) -> None:
         pytesseract.pytesseract.tesseract_cmd = config.TESSERACT_CMD
+        self.last_ocr_error: str = ""
 
     def capture_screen(self, output_path: Path = Path("latest_screen.png")) -> Path:
         """Capture primary monitor screenshot and return saved image path."""
@@ -28,10 +29,19 @@ class ScreenReader:
         return output_path
 
     def read_screen_text(self) -> str:
-        """Capture and OCR the screen text."""
+        """Capture and OCR the screen text; return empty string on OCR backend failure."""
         screenshot = self.capture_screen()
         image = Image.open(screenshot)
-        return pytesseract.image_to_string(image).strip()
+
+        try:
+            self.last_ocr_error = ""
+            return pytesseract.image_to_string(image).strip()
+        except pytesseract.pytesseract.TesseractNotFoundError as exc:
+            self.last_ocr_error = str(exc)
+            return ""
+        except FileNotFoundError as exc:
+            self.last_ocr_error = str(exc)
+            return ""
 
     def capture_screen_base64(self) -> str:
         """Capture screenshot and return base64-encoded image for multimodal LLMs."""

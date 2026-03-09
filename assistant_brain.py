@@ -65,8 +65,11 @@ class AssistantBrain:
                 )
                 return intent, self._safe_vision(prompt, image_b64)
 
+            extra = ""
+            if self.screen_reader.last_ocr_error:
+                extra = " OCR backend issue detected (likely missing Tesseract)."
             return intent, (
-                "I could not read text from the screen. "
+                "I could not read text from the screen." + extra + " "
                 "Set OLLAMA_VISION_MODEL in config.py (for example `llava`) to enable image-based analysis."
             )
 

@@ -112,6 +112,10 @@ python main.py
   - run `ollama pull llava`
   - then ask: "Luvi, what is on my screen?"
 
+- `TesseractNotFoundError` / `tesseract is not installed or not in PATH`:
+  - install Tesseract OCR and set `TESSERACT_CMD` in `config.py` to full path on Windows
+  - example: `TESSERACT_CMD = "C:/Program Files/Tesseract-OCR/tesseract.exe"`
+
 - First launch hangs/crashes around `huggingface_hub` / `WhisperModel`:
   - this is usually first-time model download or a broken virtualenv package cache
   - wait for download to complete once; if interrupted, recreate venv and reinstall deps

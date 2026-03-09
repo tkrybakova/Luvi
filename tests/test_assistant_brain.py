@@ -33,9 +33,11 @@ class AssistantBrainTests(unittest.TestCase):
 
         brain = AssistantBrain()
         brain.screen_reader.read_screen_text = lambda: ""  # type: ignore[method-assign]
+        brain.screen_reader.last_ocr_error = "tesseract missing"
         intent, message = brain.handle("what is on my screen")
         self.assertEqual(intent, "screen")
         self.assertIn("ollama_vision_model", message.lower())
+        self.assertIn("ocr backend issue", message.lower())
 
 
 if __name__ == "__main__":
