@@ -19,21 +19,36 @@ from wake_word import WakeWordDetector
 class VoiceListener:
     """Continuously listens for wake-word then transcribes user commands."""
 
-    def __init__(self, on_command: Callable[[str], None], on_status: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        on_command: Callable[[str], None],
+        on_status: Callable[[str], None],
+        on_level: Callable[[float], None] | None = None,
+    ) -> None:
         self.on_command = on_command
         self.on_status = on_status
+        self.on_level = on_level
         self._stop_event = threading.Event()
+        self._running = False
         self.wake_detector = WakeWordDetector()
         self.stt = SpeechToText()
 
     def start(self) -> None:
         """Start listener loop on a daemon thread."""
+        if self._running:
+            return
+        self._stop_event.clear()
+        self._running = True
         thread = threading.Thread(target=self._listen_loop, daemon=True)
         thread.start()
 
     def stop(self) -> None:
         """Request background loop stop."""
+        self._running = False
         self._stop_event.set()
+
+    def is_running(self) -> bool:
+        return self._running and not self._stop_event.is_set()
 
     def _record_audio(self, seconds: float) -> np.ndarray:
         frames = int(seconds * config.SAMPLE_RATE)
@@ -52,11 +67,41 @@ class VoiceListener:
         clipped = np.clip(boosted, -32768, 32767)
         return clipped.astype(np.int16)
 
+    def _audio_rms(self, audio: np.ndarray) -> float:
+        normalized = audio.astype(np.float32) / 32768.0
+        return float(np.sqrt(np.mean(np.square(normalized))))
+
     def _is_audio_loud_enough(self, audio: np.ndarray) -> bool:
         """Filter out extremely quiet segments before expensive STT calls."""
-        normalized = audio.astype(np.float32) / 32768.0
-        rms = float(np.sqrt(np.mean(np.square(normalized))))
-        return rms >= config.MIN_AUDIO_RMS
+        return self._audio_rms(audio) >= config.MIN_AUDIO_RMS
+
+    def _record_command_until_silence(self) -> np.ndarray:
+        """Continuously record command audio until silence or max length."""
+        chunks: list[np.ndarray] = []
+        elapsed = 0.0
+        silence = 0.0
+
+        while elapsed < config.COMMAND_MAX_SECONDS and not self._stop_event.is_set():
+            chunk = self._record_audio(config.COMMAND_CHUNK_SECONDS)
+            chunks.append(chunk)
+            elapsed += config.COMMAND_CHUNK_SECONDS
+
+            rms = self._audio_rms(chunk)
+            if self.on_level:
+                self.on_level(rms)
+
+            if rms >= config.MIN_AUDIO_RMS:
+                silence = 0.0
+            else:
+                silence += config.COMMAND_CHUNK_SECONDS
+
+            if elapsed >= config.COMMAND_MIN_SECONDS and silence >= config.COMMAND_SILENCE_SECONDS:
+                break
+
+        if not chunks:
+            return np.zeros((1, config.CHANNELS), dtype=np.int16)
+
+        return np.concatenate(chunks, axis=0)
 
     def _listen_loop(self) -> None:
         self.on_status("Listening for wake word: Luvi / Луви")
@@ -65,6 +110,10 @@ class VoiceListener:
             cmd_path: Path | None = None
             try:
                 wake_audio = self._record_audio(config.WAKE_LISTEN_SECONDS)
+                wake_rms = self._audio_rms(wake_audio)
+                if self.on_level:
+                    self.on_level(wake_rms)
+
                 if not self._is_audio_loud_enough(wake_audio):
                     continue
 
@@ -74,7 +123,7 @@ class VoiceListener:
                     continue
 
                 self.on_status("Wake word detected. Listening for command...")
-                cmd_audio = self._record_audio(config.COMMAND_RECORD_SECONDS)
+                cmd_audio = self._record_command_until_silence()
                 if not self._is_audio_loud_enough(cmd_audio):
                     self.on_status("Command too quiet. Please speak a little louder.")
                     continue
@@ -95,3 +144,5 @@ class VoiceListener:
                     cmd_path.unlink(missing_ok=True)
 
             self.on_status("Listening for wake word: Luvi / Луви")
+
+        self._running = False
