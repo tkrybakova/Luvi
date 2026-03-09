@@ -1,0 +1,10 @@
+faster-whisper
+sounddevice
+numpy
+scipy
+requests
+mss
+pytesseract
+Pillow
+simpleaudio
+ddgs
