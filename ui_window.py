@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
-from tkinter import scrolledtext, ttk
+from tkinter import scrolledtext
 
 import config
 from assistant_brain import AssistantBrain
@@ -41,17 +41,6 @@ class LuviUI:
         self._sync_mic_button()
 
     def _build_layout(self) -> None:
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure(
-            "Purple.Horizontal.TProgressbar",
-            troughcolor=config.UI_SURFACE,
-            bordercolor=config.UI_SURFACE,
-            background=config.UI_ACCENT,
-            lightcolor=config.UI_ACCENT,
-            darkcolor=config.UI_ACCENT,
-        )
-
         header = tk.Frame(self.root, bg=config.UI_PANEL, height=92, highlightthickness=1, highlightbackground="#4c1d95")
         header.pack(fill="x", padx=14, pady=(14, 10))
 
@@ -118,15 +107,16 @@ class LuviUI:
         ).pack(anchor="w")
 
         self.voice_level = tk.DoubleVar(value=0.0)
-        self.level_bar = ttk.Progressbar(
+        self.level_canvas = tk.Canvas(
             meter_row,
-            style="Purple.Horizontal.TProgressbar",
-            orient="horizontal",
-            mode="determinate",
-            maximum=100,
-            variable=self.voice_level,
+            height=12,
+            bg=config.UI_SURFACE,
+            highlightthickness=0,
+            bd=0,
         )
-        self.level_bar.pack(fill="x", pady=(4, 0))
+        self.level_canvas.pack(fill="x", pady=(4, 0))
+        self.level_rect = self.level_canvas.create_rectangle(0, 0, 0, 12, fill=config.UI_ACCENT, outline="")
+        self.level_canvas.bind("<Configure>", lambda _e: self._redraw_voice_meter())
 
         actions_row = tk.Frame(self.root, bg=config.UI_BG)
         actions_row.pack(fill="x", padx=14, pady=(0, 10))
@@ -243,10 +233,21 @@ class LuviUI:
     def set_intent(self, intent: str) -> None:
         self.intent_label.config(text=f"Last recognized command: {intent}")
 
-    def set_voice_level(self, rms: float) -> None:
+    @staticmethod
+    def _voice_level_percent(rms: float) -> float:
         # 0.02 ~= loud speech in normalized RMS range for most laptop mics
-        percent = min(100.0, max(0.0, (rms / 0.02) * 100.0))
+        return min(100.0, max(0.0, (rms / 0.02) * 100.0))
+
+    def _redraw_voice_meter(self) -> None:
+        width = max(1, self.level_canvas.winfo_width())
+        percent = self.voice_level.get() / 100.0
+        fill_width = int(width * percent)
+        self.level_canvas.coords(self.level_rect, 0, 0, fill_width, 12)
+
+    def set_voice_level(self, rms: float) -> None:
+        percent = self._voice_level_percent(rms)
         self.voice_level.set(percent)
+        self._redraw_voice_meter()
 
     def submit_text(self) -> None:
         text = self.entry.get().strip()
