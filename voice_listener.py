@@ -3,6 +3,7 @@ from __future__ import annotations
 import queue
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -34,6 +35,26 @@ class VoiceListener:
         self._running = False
         self.stt = SpeechToText()
         self.wake_detector = WakeWordDetector(stt=self.stt)
+        self._configure_input_device()
+
+    def _configure_input_device(self) -> None:
+        """Optionally set input device by hint to avoid flaky default devices on Windows."""
+        hint = config.INPUT_DEVICE_HINT.strip().lower()
+        if not hint:
+            return
+
+        try:
+            for index, device in enumerate(sd.query_devices()):
+                name = str(device.get("name", "")).lower()
+                if hint in name and int(device.get("max_input_channels", 0)) > 0:
+                    current = sd.default.device
+                    output_idx = current[1] if isinstance(current, (tuple, list)) else None
+                    sd.default.device = (index, output_idx)
+                    self.on_status(f"Using input device: {device.get('name', index)}")
+                    return
+            self.on_status(f"No microphone matched INPUT_DEVICE_HINT='{config.INPUT_DEVICE_HINT}'. Using default input.")
+        except Exception as exc:  # noqa: BLE001
+            self.on_status(f"Could not configure input device hint: {exc}")
 
     def start(self) -> None:
         """Start listener loop on a daemon thread."""
@@ -54,9 +75,22 @@ class VoiceListener:
 
     def _record_audio(self, seconds: float) -> np.ndarray:
         frames = int(seconds * config.SAMPLE_RATE)
-        audio = sd.rec(frames, samplerate=config.SAMPLE_RATE, channels=config.CHANNELS, dtype="int16")
-        sd.wait()
-        return audio
+        last_error: Exception | None = None
+
+        for attempt in range(1, config.AUDIO_MAX_RETRIES + 1):
+            try:
+                audio = sd.rec(frames, samplerate=config.SAMPLE_RATE, channels=config.CHANNELS, dtype="int16")
+                sd.wait()
+                return audio
+            except sd.PortAudioError as exc:
+                last_error = exc
+                self.on_status(
+                    f"Microphone stream error (attempt {attempt}/{config.AUDIO_MAX_RETRIES}). "
+                    "Trying again..."
+                )
+                time.sleep(config.AUDIO_RETRY_SECONDS)
+
+        raise RuntimeError(f"Microphone unavailable after retries: {last_error}")
 
     def _save_temp_wav(self, audio: np.ndarray) -> Path:
         temp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
@@ -139,9 +173,11 @@ class VoiceListener:
                     self.on_command(command_text)
             except Exception as exc:  # noqa: BLE001 - runtime device/model failures
                 self.on_status(
-                    "Voice listener error. If this is first launch, wait for Whisper model download or "
-                    f"recreate venv dependencies. Details: {exc}"
+                    "Voice listener error. Check microphone access/device in Windows settings, "
+                    "or set INPUT_DEVICE_HINT in config.py. "
+                    f"Details: {exc}"
                 )
+                time.sleep(config.AUDIO_RETRY_SECONDS)
             finally:
                 if wake_path and wake_path.exists():
                     wake_path.unlink(missing_ok=True)
