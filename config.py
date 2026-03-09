@@ -40,3 +40,21 @@ UI_ACCENT = "#9f5cff"
 UI_ACCENT_ALT = "#7c3aed"
 UI_TEXT = "#f3e8ff"
 UI_TEXT_MUTED = "#c4b5fd"
+
+# Purple theme colors
+UI_BG = "#130a2a"
+UI_PANEL = "#1d1140"
+UI_SURFACE = "#2a1759"
+UI_ACCENT = "#9f5cff"
+UI_ACCENT_ALT = "#7c3aed"
+UI_TEXT = "#f3e8ff"
+UI_TEXT_MUTED = "#c4b5fd"
+
+# Purple theme colors
+UI_BG = "#130a2a"
+UI_PANEL = "#1d1140"
+UI_SURFACE = "#2a1759"
+UI_ACCENT = "#9f5cff"
+UI_ACCENT_ALT = "#7c3aed"
+UI_TEXT = "#f3e8ff"
+UI_TEXT_MUTED = "#c4b5fd"

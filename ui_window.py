@@ -13,12 +13,13 @@ from text_to_speech import TextToSpeech
 
 
 class LuviUI:
-    """Simple desktop UI with conversation history and text input."""
+    """Styled purple desktop UI with conversation history and text input."""
 
     def __init__(self) -> None:
         self.root = tk.Tk()
         self.root.title(config.WINDOW_TITLE)
-        self.root.geometry("820x560")
+        self.root.geometry("980x650")
+        self.root.configure(bg=config.UI_BG)
 
         self.brain = AssistantBrain()
         self.tts = TextToSpeech()

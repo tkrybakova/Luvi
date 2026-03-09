@@ -48,39 +48,29 @@ class VoiceListener:
         write(temp.name, config.SAMPLE_RATE, audio)
         return Path(temp.name)
 
-    def _listen_loop(self):
+    def _listen_loop(self) -> None:
+        self.on_status("Listening for wake word...")
+        while not self._stop_event.is_set():
+            wake_path: Path | None = None
+            cmd_path: Path | None = None
+            try:
+                wake_audio = self._record_audio(config.WAKE_LISTEN_SECONDS)
+                wake_path = self._save_temp_wav(wake_audio)
 
-        self.on_status("Listening for wake word: Luvi / Луви")
-
-        with sd.InputStream(
-            samplerate=config.SAMPLE_RATE,
-            channels=config.CHANNELS,
-            callback=self._audio_callback,
-            device=9
-        ):
-
-            buffer = []
-
-            while not self._stop_event.is_set():
-
-                audio_chunk = self.audio_queue.get()
-
-                buffer.append(audio_chunk)
-
-                if len(buffer) * len(audio_chunk) < config.SAMPLE_RATE * 2:
+                if not self.wake_detector.detect_from_audio(wake_path):
                     continue
 
-                audio = np.concatenate(buffer)
-                buffer = []
+                self.on_status("Wake word detected. Listening for command...")
+                cmd_audio = self._record_audio(config.COMMAND_RECORD_SECONDS)
+                cmd_path = self._save_temp_wav(cmd_audio)
+                command_text = self.stt.transcribe_file(cmd_path)
 
-                try:
-
-                    wake_path = self._save_temp_wav(audio)
-
-                    if not self.wake_detector.detect_from_audio(wake_path):
-                        wake_path.unlink(missing_ok=True)
-                        continue
-
+                if command_text:
+                    self.on_command(command_text)
+            except Exception as exc:  # noqa: BLE001 - runtime device/model failures
+                self.on_status(f"Voice listener error: {exc}")
+            finally:
+                if wake_path and wake_path.exists():
                     wake_path.unlink(missing_ok=True)
 
                     self.on_status("Wake word detected")
@@ -103,12 +93,4 @@ class VoiceListener:
 
                     cmd_path.unlink(missing_ok=True)
 
-                    command = self.wake_detector.remove_wake_word(command)
-
-                    if command:
-                        self.on_command(command)
-
-                except Exception as e:
-                    self.on_status(f"Voice error: {e}")
-
-                self.on_status("Listening for wake word: Luvi / Луви")
+            self.on_status("Listening for wake word...")
