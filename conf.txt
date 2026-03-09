@@ -1,0 +1,6 @@
+PIPER_BINARY = r"D:\Luvi\piper\piper.exe"
+PIPER_MODEL_PATH = r"D:\Luvi\piper\espeak-ng-data\voices\ru_RU-irina-medium.onnx"
+PIPER_OUTPUT_DIR = Path(".luvi_audio")
+
+# OCR and screenshot
+TESSERACT_CMD = r"D:\Luvi\tesseract\tesseract.exe"

@@ -1,7 +1,6 @@
-"""Microphone listening loop for wake-word activation and command capture."""
-
 from __future__ import annotations
 
+import queue
 import tempfile
 import threading
 from pathlib import Path
@@ -23,6 +22,9 @@ class VoiceListener:
         self.on_command = on_command
         self.on_status = on_status
         self._stop_event = threading.Event()
+
+        self.audio_queue: queue.Queue[np.ndarray] = queue.Queue()
+
         self.wake_detector = WakeWordDetector()
         self.stt = SpeechToText()
 
@@ -46,31 +48,67 @@ class VoiceListener:
         write(temp.name, config.SAMPLE_RATE, audio)
         return Path(temp.name)
 
-    def _listen_loop(self) -> None:
-        self.on_status("Listening for wake word...")
-        while not self._stop_event.is_set():
-            wake_path: Path | None = None
-            cmd_path: Path | None = None
-            try:
-                wake_audio = self._record_audio(config.WAKE_LISTEN_SECONDS)
-                wake_path = self._save_temp_wav(wake_audio)
+    def _listen_loop(self):
 
-                if not self.wake_detector.detect_from_audio(wake_path):
+        self.on_status("Listening for wake word: Luvi / Луви")
+
+        with sd.InputStream(
+            samplerate=config.SAMPLE_RATE,
+            channels=config.CHANNELS,
+            callback=self._audio_callback,
+            device=9
+        ):
+
+            buffer = []
+
+            while not self._stop_event.is_set():
+
+                audio_chunk = self.audio_queue.get()
+
+                buffer.append(audio_chunk)
+
+                if len(buffer) * len(audio_chunk) < config.SAMPLE_RATE * 2:
                     continue
 
-                self.on_status("Wake word detected. Listening for command...")
-                cmd_audio = self._record_audio(config.COMMAND_RECORD_SECONDS)
-                cmd_path = self._save_temp_wav(cmd_audio)
-                command_text = self.stt.transcribe_file(cmd_path)
+                audio = np.concatenate(buffer)
+                buffer = []
 
-                if command_text:
-                    self.on_command(command_text)
-            except Exception as exc:  # noqa: BLE001 - runtime device/model failures
-                self.on_status(f"Voice listener error: {exc}")
-            finally:
-                if wake_path and wake_path.exists():
+                try:
+
+                    wake_path = self._save_temp_wav(audio)
+
+                    if not self.wake_detector.detect_from_audio(wake_path):
+                        wake_path.unlink(missing_ok=True)
+                        continue
+
                     wake_path.unlink(missing_ok=True)
-                if cmd_path and cmd_path.exists():
+
+                    self.on_status("Wake word detected")
+
+                    self.on_status("Listening for command...")
+
+                    cmd_audio = sd.rec(
+                        int(config.COMMAND_RECORD_SECONDS * config.SAMPLE_RATE),
+                        samplerate=config.SAMPLE_RATE,
+                        channels=config.CHANNELS,
+                        dtype="int16",
+                        device=9
+                    )
+
+                    sd.wait()
+
+                    cmd_path = self._save_temp_wav(cmd_audio)
+
+                    command = self.stt.transcribe_file(cmd_path)
+
                     cmd_path.unlink(missing_ok=True)
 
-            self.on_status("Listening for wake word...")
+                    command = self.wake_detector.remove_wake_word(command)
+
+                    if command:
+                        self.on_command(command)
+
+                except Exception as e:
+                    self.on_status(f"Voice error: {e}")
+
+                self.on_status("Listening for wake word: Luvi / Луви")
