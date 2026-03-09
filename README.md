@@ -112,6 +112,10 @@ python main.py
   - run `ollama pull llava`
   - then ask: "Luvi, what is on my screen?"
 
+- `TTS disabled` / `WinError 2` while speaking:
+  - install Piper binary and ensure `PIPER_BINARY` is on PATH
+  - download a voice model and set `PIPER_MODEL_PATH` to existing file
+
 - `TesseractNotFoundError` / `tesseract is not installed or not in PATH`:
   - install Tesseract OCR and set `TESSERACT_CMD` in `config.py` to full path on Windows
   - example: `TESSERACT_CMD = "C:/Program Files/Tesseract-OCR/tesseract.exe"`

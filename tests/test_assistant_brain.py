@@ -36,8 +36,8 @@ class AssistantBrainTests(unittest.TestCase):
         brain.screen_reader.last_ocr_error = "tesseract missing"
         intent, message = brain.handle("what is on my screen")
         self.assertEqual(intent, "screen")
+        self.assertIn("tesseract", message.lower())
         self.assertIn("ollama_vision_model", message.lower())
-        self.assertIn("ocr backend issue", message.lower())
 
 
 if __name__ == "__main__":

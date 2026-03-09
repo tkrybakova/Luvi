@@ -65,12 +65,14 @@ class AssistantBrain:
                 )
                 return intent, self._safe_vision(prompt, image_b64)
 
-            extra = ""
             if self.screen_reader.last_ocr_error:
-                extra = " OCR backend issue detected (likely missing Tesseract)."
+                return intent, (
+                    "Screen OCR is unavailable (Tesseract not found). "
+                    "Install Tesseract and set TESSERACT_CMD, or enable vision with OLLAMA_VISION_MODEL='llava'."
+                )
             return intent, (
-                "I could not read text from the screen." + extra + " "
-                "Set OLLAMA_VISION_MODEL in config.py (for example `llava`) to enable image-based analysis."
+                "I could not detect readable screen text. "
+                "Enable OLLAMA_VISION_MODEL='llava' for image-based screen analysis."
             )
 
         if intent == "web_search":
