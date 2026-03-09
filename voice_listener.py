@@ -1,0 +1,236 @@
+"""Microphone listening loop for wake-word activation and command capture."""
+
+from __future__ import annotations
+
+import tempfile
+import threading
+import time
+from pathlib import Path
+from typing import Callable
+
+import numpy as np
+import sounddevice as sd
+from scipy.io.wavfile import write
+
+import config
+from speech_to_text import SpeechToText
+from wake_word import WakeWordDetector
+
+
+class VoiceListener:
+    """Continuously listens for wake-word then transcribes user commands."""
+
+    def __init__(
+        self,
+        on_command: Callable[[str], None],
+        on_status: Callable[[str], None],
+        on_level: Callable[[float], None] | None = None,
+    ) -> None:
+        self.on_command = on_command
+        self.on_status = on_status
+        self.on_level = on_level
+        self._stop_event = threading.Event()
+        self._running = False
+        self.stt = SpeechToText()
+        self.wake_detector = WakeWordDetector(stt=self.stt)
+        self.input_device_index: int | None = None
+        self.sample_rate = config.SAMPLE_RATE
+        self._configure_input_device()
+        self._prepare_audio_input()
+
+    def _configure_input_device(self) -> None:
+        """Optionally set input device by hint to avoid flaky default devices on Windows."""
+        hint = config.INPUT_DEVICE_HINT.strip().lower()
+        if not hint:
+            return
+
+        try:
+            for index, device in enumerate(sd.query_devices()):
+                name = str(device.get("name", "")).lower()
+                if hint in name and int(device.get("max_input_channels", 0)) > 0:
+                    self.input_device_index = index
+                    self.on_status(f"Using input device: {device.get('name', index)}")
+                    return
+            self.on_status(f"No microphone matched INPUT_DEVICE_HINT='{config.INPUT_DEVICE_HINT}'. Using default input.")
+        except Exception as exc:  # noqa: BLE001
+            self.on_status(f"Could not configure input device hint: {exc}")
+
+    def _switch_to_next_sample_rate(self) -> None:
+        """Cycle configured sample rates when current one fails at runtime."""
+        candidates = list(config.AUDIO_SAMPLE_RATE_FALLBACKS)
+        if self.sample_rate not in candidates:
+            self.sample_rate = int(candidates[0])
+            return
+
+        idx = candidates.index(self.sample_rate)
+        next_rate = candidates[(idx + 1) % len(candidates)]
+        self.sample_rate = int(next_rate)
+        self.on_status(f"Switching microphone sample rate to {self.sample_rate} Hz")
+
+    def _prepare_audio_input(self) -> None:
+        """Pick the first working sample rate for the selected/default input device."""
+        for candidate in config.AUDIO_SAMPLE_RATE_FALLBACKS:
+            try:
+                sd.check_input_settings(
+                    device=self.input_device_index,
+                    samplerate=candidate,
+                    channels=config.CHANNELS,
+                    dtype="int16",
+                )
+                self.sample_rate = int(candidate)
+                self.on_status(f"Microphone ready at {self.sample_rate} Hz")
+                return
+            except Exception:
+                continue
+
+        self.sample_rate = config.SAMPLE_RATE
+        self.on_status(
+            "Could not pre-validate microphone sample rates. "
+            f"Will try runtime capture at {self.sample_rate} Hz."
+        )
+
+    def start(self) -> None:
+        """Start listener loop on a daemon thread."""
+        if self._running:
+            return
+        self._stop_event.clear()
+        self._running = True
+        thread = threading.Thread(target=self._listen_loop, daemon=True)
+        thread.start()
+
+    def stop(self) -> None:
+        """Request background loop stop."""
+        self._running = False
+        self._stop_event.set()
+
+    def is_running(self) -> bool:
+        return self._running and not self._stop_event.is_set()
+
+    def _record_audio(self, seconds: float) -> np.ndarray:
+        frames = int(seconds * self.sample_rate)
+        last_error: Exception | None = None
+
+        for attempt in range(1, config.AUDIO_MAX_RETRIES + 1):
+            try:
+                audio = sd.rec(
+                    frames,
+                    samplerate=self.sample_rate,
+                    channels=config.CHANNELS,
+                    dtype="int16",
+                    device=self.input_device_index,
+                )
+                sd.wait()
+                return audio
+            except sd.PortAudioError as exc:
+                last_error = exc
+                self.on_status(
+                    f"Microphone stream error (attempt {attempt}/{config.AUDIO_MAX_RETRIES}). "
+                    "Trying again..."
+                )
+
+                error_text = str(exc).lower()
+                if "invalid sample rate" in error_text:
+                    self._switch_to_next_sample_rate()
+                elif attempt == 1:
+                    # On repeated failures, probe rates again to recover from host-device mismatch.
+                    self._prepare_audio_input()
+
+                time.sleep(config.AUDIO_RETRY_SECONDS)
+
+        raise RuntimeError(f"Microphone unavailable after retries: {last_error}")
+
+    def _save_temp_wav(self, audio: np.ndarray) -> Path:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp:
+            write(temp.name, self.sample_rate, audio)
+            return Path(temp.name)
+
+    def _apply_gain(self, audio: np.ndarray, gain: float) -> np.ndarray:
+        """Amplify audio to improve quiet speech recognition while clipping safely."""
+        boosted = audio.astype(np.float32) * gain
+        clipped = np.clip(boosted, -32768, 32767)
+        return clipped.astype(np.int16)
+
+    def _audio_rms(self, audio: np.ndarray) -> float:
+        normalized = audio.astype(np.float32) / 32768.0
+        return float(np.sqrt(np.mean(np.square(normalized))))
+
+    def _is_audio_loud_enough(self, audio: np.ndarray) -> bool:
+        """Filter out extremely quiet segments before expensive STT calls."""
+        return self._audio_rms(audio) >= config.MIN_AUDIO_RMS
+
+    def _record_command_until_silence(self) -> np.ndarray:
+        """Continuously record command audio until silence or max length."""
+        chunks: list[np.ndarray] = []
+        elapsed = 0.0
+        silence = 0.0
+
+        while elapsed < config.COMMAND_MAX_SECONDS and not self._stop_event.is_set():
+            chunk = self._record_audio(config.COMMAND_CHUNK_SECONDS)
+            chunks.append(chunk)
+            elapsed += config.COMMAND_CHUNK_SECONDS
+
+            rms = self._audio_rms(chunk)
+            if self.on_level:
+                self.on_level(rms)
+
+            if rms >= config.MIN_AUDIO_RMS:
+                silence = 0.0
+            else:
+                silence += config.COMMAND_CHUNK_SECONDS
+
+            if elapsed >= config.COMMAND_MIN_SECONDS and silence >= config.COMMAND_SILENCE_SECONDS:
+                break
+
+        if not chunks:
+            return np.zeros((1, config.CHANNELS), dtype=np.int16)
+
+        return np.concatenate(chunks, axis=0)
+
+    def _listen_loop(self) -> None:
+        self.on_status("Listening for wake word: Luvi / Луви")
+        while not self._stop_event.is_set():
+            wake_path: Path | None = None
+            cmd_path: Path | None = None
+            try:
+                wake_audio = self._record_audio(config.WAKE_LISTEN_SECONDS)
+                wake_rms = self._audio_rms(wake_audio)
+                if self.on_level:
+                    self.on_level(wake_rms)
+
+                if not self._is_audio_loud_enough(wake_audio):
+                    continue
+
+                wake_audio = self._apply_gain(wake_audio, config.WAKE_AUDIO_GAIN)
+                wake_path = self._save_temp_wav(wake_audio)
+                if not self.wake_detector.detect_from_audio(wake_path):
+                    continue
+
+                self.on_status("Wake word detected. Listening for command...")
+                cmd_audio = self._record_command_until_silence()
+                if not self._is_audio_loud_enough(cmd_audio):
+                    self.on_status("Command too quiet. Please speak a little louder.")
+                    continue
+
+                cmd_audio = self._apply_gain(cmd_audio, config.COMMAND_AUDIO_GAIN)
+                cmd_path = self._save_temp_wav(cmd_audio)
+                command_text = self.stt.transcribe_file(cmd_path)
+                command_text = self.wake_detector.remove_wake_word(command_text)
+
+                if command_text:
+                    self.on_command(command_text)
+            except Exception as exc:  # noqa: BLE001 - runtime device/model failures
+                self.on_status(
+                    "Voice listener error. Check microphone access/device in Windows settings, "
+                    "set INPUT_DEVICE_HINT in config.py, or run from latest pulled code. "
+                    f"Details: {exc}"
+                )
+                time.sleep(config.AUDIO_RETRY_SECONDS)
+            finally:
+                if wake_path and wake_path.exists():
+                    wake_path.unlink(missing_ok=True)
+                if cmd_path and cmd_path.exists():
+                    cmd_path.unlink(missing_ok=True)
+
+            self.on_status("Listening for wake word: Luvi / Луви")
+
+        self._running = False
