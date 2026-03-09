@@ -4,7 +4,7 @@ Luvi is a modular local desktop AI assistant for laptops. It continuously listen
 
 ## Features
 
-- Wake-word workflow: `Luvi/Луви` → record command → transcribe with **faster-whisper**.
+- Wake-word workflow: `Luvi/Луви` → continuous command capture-until-silence → transcribe with **faster-whisper**.
 - Local LLM reasoning through **Ollama**.
 - Voice output with **Piper TTS**.
 - Command routing:
@@ -12,11 +12,12 @@ Luvi is a modular local desktop AI assistant for laptops. It continuously listen
   - AI Q&A
   - web search + LLM summarization
   - screen reading with OCR
-- Tkinter desktop UI (purple themed):
+- Tkinter desktop UI (purple themed, interactive):
   - modern purple header + cards
-  - conversation history
-  - recognized command/intent display
-  - text-input fallback
+  - live voice level meter
+  - start/stop listening microphone toggle
+  - quick action buttons + conversation history
+  - recognized command/intent display + text-input fallback
 - Runtime safeguards:
   - temporary audio files are cleaned automatically
   - graceful user-facing errors when Ollama/TTS/search fail
@@ -82,6 +83,7 @@ Set these values for your machine:
 - `TESSERACT_CMD`
 - `MIN_AUDIO_RMS` (microphone sensitivity; lower value = easier wake-word triggering)
 - `WAKE_AUDIO_GAIN` and `COMMAND_AUDIO_GAIN` (boost quiet speech before STT)
+- `COMMAND_CHUNK_SECONDS`, `COMMAND_MIN_SECONDS`, `COMMAND_MAX_SECONDS`, `COMMAND_SILENCE_SECONDS` (continuous command listening behavior)
 
 ## Run
 
@@ -95,6 +97,11 @@ python main.py
   - lower `MIN_AUDIO_RMS` in `config.py` (e.g., `0.0015` -> `0.0010`)
   - increase `WAKE_AUDIO_GAIN` / `COMMAND_AUDIO_GAIN` (e.g., `2.2` -> `3.0`)
   - verify microphone input level in OS settings
+
+- First launch hangs/crashes around `huggingface_hub` / `WhisperModel`:
+  - this is usually first-time model download or a broken virtualenv package cache
+  - wait for download to complete once; if interrupted, recreate venv and reinstall deps
+  - recommended reset (Windows): remove `.venv`, then `python -m venv .venv` and `pip install -r requirements.txt`
 
 - `ollama` command not found on Windows:
   - reinstall Ollama from the official installer
