@@ -1,5 +1,8 @@
 """Screen capture + OCR helpers."""
 
+from __future__ import annotations
+
+import base64
 from pathlib import Path
 
 import mss
@@ -29,3 +32,8 @@ class ScreenReader:
         screenshot = self.capture_screen()
         image = Image.open(screenshot)
         return pytesseract.image_to_string(image).strip()
+
+    def capture_screen_base64(self) -> str:
+        """Capture screenshot and return base64-encoded image for multimodal LLMs."""
+        screenshot = self.capture_screen()
+        return base64.b64encode(screenshot.read_bytes()).decode("utf-8")

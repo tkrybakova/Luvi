@@ -79,6 +79,7 @@ Luvi is a modular local desktop AI assistant for laptops. It continuously listen
 
 Set these values for your machine:
 - `OLLAMA_MODEL`
+- `OLLAMA_VISION_MODEL` (optional, e.g. `llava` for screenshot understanding)
 - `PIPER_MODEL_PATH`
 - `TESSERACT_CMD`
 - `MIN_AUDIO_RMS` (microphone sensitivity; lower value = easier wake-word triggering)
@@ -105,6 +106,11 @@ python main.py
   - set `INPUT_DEVICE_HINT` in `config.py` (example: `"microphone"`) to pick a stable input device
   - listener now retries automatically (`AUDIO_MAX_RETRIES`) and probes fallback rates (`AUDIO_SAMPLE_RATE_FALLBACKS`) before failing
   - run `git pull` to ensure you have latest microphone-fix code (older builds called `sd.rec` directly in loop)
+
+- Screen analysis only returns OCR/screenshot and not visual understanding:
+  - set `OLLAMA_VISION_MODEL = "llava"` in `config.py`
+  - run `ollama pull llava`
+  - then ask: "Luvi, what is on my screen?"
 
 - First launch hangs/crashes around `huggingface_hub` / `WhisperModel`:
   - this is usually first-time model download or a broken virtualenv package cache

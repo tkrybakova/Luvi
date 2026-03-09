@@ -1,6 +1,7 @@
+"""Microphone listening loop for wake-word activation and command capture."""
+
 from __future__ import annotations
 
-import queue
 import tempfile
 import threading
 import time
@@ -29,9 +30,6 @@ class VoiceListener:
         self.on_status = on_status
         self.on_level = on_level
         self._stop_event = threading.Event()
-
-        self.audio_queue: queue.Queue[np.ndarray] = queue.Queue()
-
         self._running = False
         self.stt = SpeechToText()
         self.wake_detector = WakeWordDetector(stt=self.stt)
@@ -56,6 +54,18 @@ class VoiceListener:
             self.on_status(f"No microphone matched INPUT_DEVICE_HINT='{config.INPUT_DEVICE_HINT}'. Using default input.")
         except Exception as exc:  # noqa: BLE001
             self.on_status(f"Could not configure input device hint: {exc}")
+
+    def _switch_to_next_sample_rate(self) -> None:
+        """Cycle configured sample rates when current one fails at runtime."""
+        candidates = list(config.AUDIO_SAMPLE_RATE_FALLBACKS)
+        if self.sample_rate not in candidates:
+            self.sample_rate = int(candidates[0])
+            return
+
+        idx = candidates.index(self.sample_rate)
+        next_rate = candidates[(idx + 1) % len(candidates)]
+        self.sample_rate = int(next_rate)
+        self.on_status(f"Switching microphone sample rate to {self.sample_rate} Hz")
 
     def _prepare_audio_input(self) -> None:
         """Pick the first working sample rate for the selected/default input device."""
@@ -117,18 +127,22 @@ class VoiceListener:
                     f"Microphone stream error (attempt {attempt}/{config.AUDIO_MAX_RETRIES}). "
                     "Trying again..."
                 )
-                time.sleep(config.AUDIO_RETRY_SECONDS)
 
-                # On repeated failures, probe rates again to recover from host-device mismatch.
-                if attempt == 1:
+                error_text = str(exc).lower()
+                if "invalid sample rate" in error_text:
+                    self._switch_to_next_sample_rate()
+                elif attempt == 1:
+                    # On repeated failures, probe rates again to recover from host-device mismatch.
                     self._prepare_audio_input()
+
+                time.sleep(config.AUDIO_RETRY_SECONDS)
 
         raise RuntimeError(f"Microphone unavailable after retries: {last_error}")
 
     def _save_temp_wav(self, audio: np.ndarray) -> Path:
-        temp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-        write(temp.name, self.sample_rate, audio)
-        return Path(temp.name)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp:
+            write(temp.name, self.sample_rate, audio)
+            return Path(temp.name)
 
     def _apply_gain(self, audio: np.ndarray, gain: float) -> np.ndarray:
         """Amplify audio to improve quiet speech recognition while clipping safely."""
@@ -173,7 +187,7 @@ class VoiceListener:
         return np.concatenate(chunks, axis=0)
 
     def _listen_loop(self) -> None:
-        self.on_status("Listening for wake word...")
+        self.on_status("Listening for wake word: Luvi / Луви")
         while not self._stop_event.is_set():
             wake_path: Path | None = None
             cmd_path: Path | None = None
@@ -188,7 +202,6 @@ class VoiceListener:
 
                 wake_audio = self._apply_gain(wake_audio, config.WAKE_AUDIO_GAIN)
                 wake_path = self._save_temp_wav(wake_audio)
-
                 if not self.wake_detector.detect_from_audio(wake_path):
                     continue
 
@@ -201,6 +214,7 @@ class VoiceListener:
                 cmd_audio = self._apply_gain(cmd_audio, config.COMMAND_AUDIO_GAIN)
                 cmd_path = self._save_temp_wav(cmd_audio)
                 command_text = self.stt.transcribe_file(cmd_path)
+                command_text = self.wake_detector.remove_wake_word(command_text)
 
                 if command_text:
                     self.on_command(command_text)
@@ -214,25 +228,7 @@ class VoiceListener:
             finally:
                 if wake_path and wake_path.exists():
                     wake_path.unlink(missing_ok=True)
-
-                    self.on_status("Wake word detected")
-
-                    self.on_status("Listening for command...")
-
-                    cmd_audio = sd.rec(
-                        int(config.COMMAND_RECORD_SECONDS * config.SAMPLE_RATE),
-                        samplerate=config.SAMPLE_RATE,
-                        channels=config.CHANNELS,
-                        dtype="int16",
-                        device=9
-                    )
-
-                    sd.wait()
-
-                    cmd_path = self._save_temp_wav(cmd_audio)
-
-                    command = self.stt.transcribe_file(cmd_path)
-
+                if cmd_path and cmd_path.exists():
                     cmd_path.unlink(missing_ok=True)
 
             self.on_status("Listening for wake word: Luvi / Луви")

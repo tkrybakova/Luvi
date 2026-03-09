@@ -1,8 +1,14 @@
 """Web-search utilities for Luvi."""
 
-from duckduckgo_search import DDGS
+from __future__ import annotations
 
 import config
+
+try:
+    from ddgs import DDGS
+except Exception:  # noqa: BLE001
+    # Backward compatibility for environments where old package is still installed.
+    from duckduckgo_search import DDGS  # type: ignore[no-redef]
 
 
 class WebSearch:

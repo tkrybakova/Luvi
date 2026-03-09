@@ -6,5 +6,5 @@ requests
 mss
 pytesseract
 Pillow
-duckduckgo-search
 simpleaudio
+ddgs
