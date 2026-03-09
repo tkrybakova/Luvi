@@ -98,6 +98,11 @@ python main.py
   - increase `WAKE_AUDIO_GAIN` / `COMMAND_AUDIO_GAIN` (e.g., `2.2` -> `3.0`)
   - verify microphone input level in OS settings
 
+- First launch hangs/crashes around `huggingface_hub` / `WhisperModel`:
+  - this is usually first-time model download or a broken virtualenv package cache
+  - wait for download to complete once; if interrupted, recreate venv and reinstall deps
+  - recommended reset (Windows): remove `.venv`, then `python -m venv .venv` and `pip install -r requirements.txt`
+
 - `ollama` command not found on Windows:
   - reinstall Ollama from the official installer
   - close/reopen terminal (to refresh PATH)

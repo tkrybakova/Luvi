@@ -13,9 +13,9 @@ import config
 class WakeWordDetector:
     """Detects wake words (e.g. Luvi / Луви) in transcribed audio."""
 
-    def __init__(self, wake_words: tuple[str, ...] = config.WAKE_WORD_ALIASES) -> None:
+    def __init__(self, wake_words: tuple[str, ...] = config.WAKE_WORD_ALIASES, stt: SpeechToText | None = None) -> None:
         self.wake_words = tuple(word.lower() for word in wake_words)
-        self.stt = SpeechToText()
+        self.stt = stt or SpeechToText()
 
     def detect_from_audio(self, audio_file: Path) -> bool:
         """Transcribe a short audio chunk and detect wake word."""

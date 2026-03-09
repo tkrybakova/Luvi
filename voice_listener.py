@@ -30,8 +30,8 @@ class VoiceListener:
         self.on_level = on_level
         self._stop_event = threading.Event()
         self._running = False
-        self.wake_detector = WakeWordDetector()
         self.stt = SpeechToText()
+        self.wake_detector = WakeWordDetector(stt=self.stt)
 
     def start(self) -> None:
         """Start listener loop on a daemon thread."""
@@ -136,7 +136,10 @@ class VoiceListener:
                 if command_text:
                     self.on_command(command_text)
             except Exception as exc:  # noqa: BLE001 - runtime device/model failures
-                self.on_status(f"Voice listener error: {exc}")
+                self.on_status(
+                    "Voice listener error. If this is first launch, wait for Whisper model download or "
+                    f"recreate venv dependencies. Details: {exc}"
+                )
             finally:
                 if wake_path and wake_path.exists():
                     wake_path.unlink(missing_ok=True)
