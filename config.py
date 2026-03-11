@@ -23,6 +23,12 @@ AUDIO_SAMPLE_RATE_FALLBACKS = (16000, 44100, 48000)
 
 # Models and local services
 WHISPER_MODEL_SIZE = "base"
+WHISPER_LANGUAGE = None  # None = auto-detect (better for mixed English/Russian speech)
+WHISPER_BEAM_SIZE = 1  # Faster decoding; increase for quality if CPU budget allows
+WHISPER_BEST_OF = 1
+WHISPER_TEMPERATURE = 0.0
+WHISPER_VAD_FILTER = True
+WHISPER_INITIAL_PROMPT = "Assistant wake words: Luvi, Луви. Commands may be in English or Russian."
 OLLAMA_MODEL = "llama3.1"
 OLLAMA_VISION_MODEL = ""  # Optional, e.g. "llava" for screenshot understanding
 OLLAMA_URL = "http://localhost:11434/api/generate"
